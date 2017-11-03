@@ -139,7 +139,7 @@ function killShip(shot) {
       collidedEnemy = Object.assign({}, enemy);
       context.clearRect(enemy.x, enemy.y, enemy.width, enemy.height);
       explode({
-        width: enemy.width + 10, height: enemy.height + 10,
+        width: enemy.width, height: enemy.height,
         x: enemy.x, y: enemy.y
       },
       { x: enemy.x + enemy.width /2 , y: enemy.y + enemy.height /2 },
@@ -165,10 +165,14 @@ function explode(container, center, context) {
 
   paint();
   function paint() {
+    context.clearRect(container.x - 10, container.y - 10, container.width + 20, container.height + 20);
+    
     if(p.update()){
+      context.clearRect(container.x - 10, container.y - 10, container.width + 20, container.height + 20);
+      cancelAnimationFrame(explosionId);
       return;
     }
-    requestAnimationFrame(paint);
+    var explosionId = requestAnimationFrame(paint);
   }
 }
 

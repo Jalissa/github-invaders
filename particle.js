@@ -35,23 +35,31 @@ var ParticleSystem = function(container, center, count, context) {
 	}
  
 	this.update = function() {
-		context.clearRect(container.x, container.y, container.width, container.height);
+		const stopAnimation = this.particles.filter(particle => {
+			return container.x < particle.x + 1 &&
+				container.x + container.width > particle.x &&
+				container.y < particle.y + 1 &&
+				container.y + container.height  > particle.y
+		});
+
+		if(!stopAnimation.length){
+			return true;
+		}
+		
 		for (let i = 0 ; i < count ; ++i ) {
 			const x = this.particles[i].x;
 			const y = this.particles[i].y;
 			
 			if (container.x < x + 1 &&
-					container.x + container.width + 20 > x &&
+					container.x + container.width  > x &&
 					container.y < y + 1 &&
-					container.y + container.height + 20 > y) {
+					container.y + container.height  > y) {
 
 				this.particles[i].update();
 
 				context.fillRect(x, y, 1, 1);
-			} else {	
-				context.clearRect(container.x, container.y, container.width, container.height);
-				return true;
-      }
+			} 
 		}
+
 	};
 };
