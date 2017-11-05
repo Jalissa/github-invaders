@@ -1,6 +1,6 @@
 const canvas = document.getElementById('canvas');
-canvas.width =  900;
-canvas.height = 900;
+canvas.width = 900;
+canvas.height = 800;
 
 const context = canvas.getContext('2d');
 
@@ -15,23 +15,20 @@ let LEFT = false;
 let RIGHT = false;
 
 let shipMovementAnimation;
+let enemiesMovementAnimation;
 
 const settings = {
 	enemies: {
-    width: WIDTH,
-    height: HEIGHT,
-    margin: 10,
+		width: WIDTH,
+		height: HEIGHT,
+		margin: 20,
     total: 20,
-    totalVariety: 3,
-    1: {
-      points: 10
-    },
-    2: {
-      points: 5
-    },
-    3: {
-      points: 2
-    }
+    speed: 0.3,
+		rowLimit: 10,
+		totalVariety: 3,
+		1: { points: 10	},
+		2: { points: 5	},
+		3: { points: 2  }
 	},
 	ships: {
 		width: WIDTH,
@@ -56,21 +53,26 @@ function Ship(x, y, width, height, speed = 2, enemyShipInfo) {
 	this.x = x;
 	this.y = y;
 	this.width = width;
-  this.height = height;
-  this.speed = speed;
-  this.level = enemyShipInfo && enemyShipInfo.level;
+	this.height = height;
+	this.speed = speed;
+	this.level = enemyShipInfo && enemyShipInfo.level;
   this.points = enemyShipInfo && enemyShipInfo.points;
-
+  this.lastOne = false;
+  this.firstOne = false;
 }
 Ship.prototype.move = function(left, limitWidth) {
-  const {x, speed, width} = this;
-	if(left){
-    const newX = x - speed;
-    this.x = newX >= 0 ? x - speed : x;
-  } else {
-    const newX = x + speed;
-    this.x = newX <= (limitWidth - width) ? x + speed : x;
-  }
+	const { x, speed, width } = this;
+	if (left) {
+		const newX = x - speed;
+		this.x = newX >= 0 ? x - speed : x;
+	} else {
+		const newX = x + speed;
+		this.x = newX <= limitWidth - width ? x + speed : x;
+	}
+};
+
+Ship.prototype.down = function(margin) {
+	this.y += this.height + margin;
 };
 
 function Shot(ship, y, width, height, movement) {
@@ -90,60 +92,87 @@ context.fillRect(player.x, player.y, player.width, player.height);
 
 let renderedEnemies = renderEnemies();
 
+let enemiesLeft = false;
+moveEnemies();
+function moveEnemies(){
+  renderedEnemies.forEach(enemy => {
+    if(enemy.x - enemy.speed <= 0 && enemiesLeft){
+      enemiesLeft = false;
+    } 
+
+    context.clearRect(enemy.x, enemy.y, enemy.width, enemy.height);       
+    enemy.move(enemiesLeft, canvas.width);
+    context.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+
+    if(enemy.x + enemy.speed >= canvas.width - enemy.width && !enemiesLeft){
+      enemiesLeft = true;
+    }
+
+  });
+  enemiesMovementAnimation = requestAnimationFrame(moveEnemies);
+}
+
 function moveShip() {
-  if(LEFT || RIGHT) {
-    context.clearRect(player.x, player.y, player.width, player.height);
-    player.move(LEFT, canvas.width);
-    context.fillRect(player.x, player.y, player.width, player.height);
-  } 
-  shipMovementAnimation = requestAnimationFrame(moveShip);    
+	if (LEFT || RIGHT) {
+		context.clearRect(player.x, player.y, player.width, player.height);
+		player.move(LEFT, canvas.width);
+		context.fillRect(player.x, player.y, player.width, player.height);
+	}
+	shipMovementAnimation = requestAnimationFrame(moveShip);
 }
 
 function onkeyup(event) {
-  if(event.keyCode === LEFT_ARROW_KEY) LEFT = false;
-  if(event.keyCode === RIGHT_ARROW_KEY) RIGHT = false;
-  if(!LEFT && !RIGHT){
-    cancelAnimationFrame(shipMovementAnimation);
-    shipMovementAnimation = undefined;
-  }
-
-  shoot(event);
+	if (event.keyCode === LEFT_ARROW_KEY) LEFT = false;
+	if (event.keyCode === RIGHT_ARROW_KEY) RIGHT = false;
+	if (!LEFT && !RIGHT) {
+		cancelAnimationFrame(shipMovementAnimation);
+		shipMovementAnimation = undefined;
+	}
+	shoot(event);
 }
 
 function onkeydown(event) {
-  if(event.keyCode === LEFT_ARROW_KEY) LEFT = true;
-  if(event.keyCode === RIGHT_ARROW_KEY) RIGHT = true;
-  if(!shipMovementAnimation) moveShip();
+	if (event.keyCode === LEFT_ARROW_KEY) LEFT = true;
+	if (event.keyCode === RIGHT_ARROW_KEY) RIGHT = true;
+	if (!shipMovementAnimation) moveShip();
 }
 
 document.addEventListener('keydown', onkeydown);
 document.addEventListener('keyup', onkeyup);
 
 function renderEnemies() {
-  const enemyShips = [];
-	const { width, height, margin, speed, total, totalVariety } = enemies;
-  let x = 0;
-  let y = 0;
-  let currentVariety = 1;
-
-	for (let i = 0; i < total*totalVariety; i++) {
+	let enemyShips = [];
+  const { width, height, margin, speed, total, totalVariety, rowLimit } = enemies;
+  const initX = (canvas.width - rowLimit * (width + margin)) / 2;
+	let x = initX;
+	let y = 0;
+	let currentVariety = 1;
+	let count = 1;
+	// const margin = (canvas.width - rowLimit * width) / rowLimit;
+	
+	for (let i = 0; i < total * totalVariety; i++) {
     const enemy = addEnemy(totalVariety, x, y);
-    const newX = enemy.width + margin + x;
-    x = newX + enemy.width <= canvas.width ? newX : 0;
-    if (x === 0) { 
-      y += enemy.height + margin; 
+    if(x === initX){
+      enemy.firstOne = true;
     }
-    if(i === total*currentVariety){
-      currentVariety++;
-    }
+		const newX = enemy.width + margin + x;
+		x = newX + enemy.width >= canvas.width || count === rowLimit ? initX: newX;
+		if (x === initX) {
+      enemy.lastOne = true;
+      count = 0;
+			y += enemy.height + margin;
+		}
+		if (i === total * currentVariety) {
+			currentVariety++;
+		}
+		count++;
   }
   
-  function addEnemy(varietyNumber, x, y){
-    const enemy = new Ship(x, y, width, height, speed, 
-        { points: enemies[varietyNumber].points, level: varietyNumber } )
+	function addEnemy(varietyNumber, x, y) {
+		const enemy = new Ship(x, y, width, height, speed, { points: enemies[varietyNumber].points, level: varietyNumber });
     enemyShips.push(enemy);
     context.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
-    return enemy;
+		return enemy;
   }
 
 	return enemyShips;
