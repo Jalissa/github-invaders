@@ -27,8 +27,8 @@ const ParticleSystem = function(container, center, count, context) {
 	for (let i = 0; i < count; ++i) {
 		let x = this.center.x,
 			y = this.center.y,
-			vx = Math.random() * 3 - 1.5,
-			vy = Math.random() * 3 - 1.5;
+			vx = Math.random() * 10 - 5,
+			vy = Math.random() * 10 - 5;
 
 		this.particles.push(new Particle(x, y, vx, vy));
 	}
@@ -36,7 +36,7 @@ const ParticleSystem = function(container, center, count, context) {
 	this.update = function() {
 		const stopAnimation = this.particles.filter(particle => isOutOfContainer(container, particle));
 
-		if (stopAnimation.length < count / 10) {
+		if (stopAnimation.length < count / 2) {
 			return true;
 		}
 
