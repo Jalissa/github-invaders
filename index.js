@@ -1,11 +1,12 @@
+const pointsElement = document.getElementById('points');
 const canvas = document.getElementById('canvas');
-canvas.width = 900;
-canvas.height = 800;
+canvas.width = 700;
+canvas.height = 700;
 
 const context = canvas.getContext('2d');
 
-const WIDTH = 60;
-const HEIGHT = 40;
+const WIDTH = 40;
+const HEIGHT = 20;
 const INIT_Y = canvas.height - HEIGHT;
 const INIT_X = canvas.width / 2 - WIDTH;
 const LEFT_ARROW_KEY = 37;
@@ -18,6 +19,9 @@ let shipMovementAnimation;
 let enemiesMovementAnimation;
 let enemiesShootingAnimation;
 let enemiesDirection = 'right';
+
+let renderedEnemies = [];
+let renderedShields = [];
 
 const settings = {
 	enemies: {
@@ -42,35 +46,41 @@ const settings = {
 		width: 5,
 		height: 20,
 		movement: 10,
-		y: INIT_Y - HEIGHT / 2
+		y: INIT_Y - HEIGHT
 	},
 	explosions: {
 		count: 30
-	}
+  },
+  shields:{
+    width: 80,
+    height: 40,
+    total: 4,
+    margin: 60,
+    y: INIT_Y - HEIGHT * 4
+  }
 };
 
-const { ships, shots, enemies, explosions } = settings;
+const { ships, shots, enemies, explosions, shields } = settings;
 const player = new Ship(ships.x, ships.y, ships.width, ships.height);
 player.draw(context, null, null);
 
-let renderedEnemies = renderEnemies();
-
+renderedEnemies = renderEnemies();
 moveEnemies();
 startEnemiesShooting();
+renderShields();
 
 function moveEnemies(){
   if(!renderedEnemies.length) {
     cancelAnimationFrame(enemiesMovementAnimation);
   }
-
-  renderedEnemies.forEach((enemy) => {
+  renderedEnemies.forEach(enemy => {
     if(enemy.x - enemy.speed <= 0){
       enemiesDirection = 'right';
     } 
     enemy.draw(context, enemiesDirection, canvas.width);
     if(enemy.x + enemy.speed >= canvas.width - enemy.width){
       enemiesDirection = 'left';
-    }
+    }     
   });
 
   enemiesMovementAnimation = requestAnimationFrame(moveEnemies);
@@ -80,7 +90,6 @@ function startEnemiesShooting(){
   if(!renderedEnemies.length) {
     cancelAnimationFrame(enemiesShootingAnimation);
   }
-
   const loners = renderedEnemies.filter(enemy => {
     const underlings = renderedEnemies.filter(enemy2 => {
       return enemy.x === enemy2.x && enemy2.y >= enemy.height + enemies.margin + enemy.y;
@@ -93,10 +102,10 @@ function startEnemiesShooting(){
   const randomEnemy = loners[Math.floor(Math.random()*loners.length)];
   if (randomEnemy) {
     const shot = new Shot(randomEnemy, randomEnemy.y + randomEnemy.height, shots.width, shots.height, shots.movement / 2);
-    shoot(shot, true);
+    shoot(shot, 'down');
     setTimeout(() => {
       enemiesShootingAnimation = requestAnimationFrame(startEnemiesShooting);    
-    }, 2000)
+    }, 1000);
   } else {
     cancelAnimationFrame(enemiesShootingAnimation);
   }
@@ -121,7 +130,9 @@ function onkeyup(event) {
 
   if (event.keyCode !== 32) return;
   const shot = new Shot(player, shots.y, shots.width, shots.height, shots.movement);  
-  shoot(shot, false);
+  delay(() => {
+    shoot(shot, 'up');
+  }, 300);
 }
 
 function onkeydown(event) {
@@ -143,7 +154,7 @@ function renderEnemies() {
 	let count = 1;
 	// const margin = (canvas.width - rowLimit * width) / rowLimit;
 	for (let i = 0; i < total * totalVariety; i++) {
-    const enemy = addEnemy(totalVariety, x, y);
+    const enemy = addEnemy(currentVariety, x, y);
 		const newX = enemy.width + margin + x;
 		x = newX + enemy.width >= canvas.width || count === rowLimit ? initX: newX;
 		if (x === initX) {
@@ -164,33 +175,62 @@ function renderEnemies() {
 	return enemyShips;
 }
 
-// SHOOTING
-function shoot(shot, ignoreCollisions) {
-	paintShots(shot, ignoreCollisions);
+function renderShields(){
+  const { width, height, margin, total, y} = shields;
+  const initX = 30 + (canvas.width - total * (width + margin)) / 2;
+  let x = initX;
+  for (let i = 0; i < total; i++) {
+    renderedShields.push({x, y, width, height});
+    context.fillRect(x, y, width, height);
+    x += margin + width;
+  }
 }
 
-function paintShots(shot, ignoreCollisions) {
+// SHOOTING
+function shoot(shot, direction) {
   let stopMovement = false;
-  if(shot.y < 0 || shot.y >= canvas.width) {
+  if(shot.y < 0 || shot.y >= canvas.height) {
     stopMovement = true;
   }
-  if(!ignoreCollisions) {
-    const { collisions, collidedEnemy } = detectCollision(shot, renderedEnemies);
-    if (collisions.length && !ignoreCollisions) {
+  if(direction === 'up') {
+    const { collisions, collided } = detectCollision(shot, renderedEnemies);
+    if (collisions.length) {
       stopMovement = true;
       cancelAnimationFrame(enemiesMovementAnimation);
-      killShip(collidedEnemy);
+      killShip(collided);
+      addPoints(collided.points);
       moveEnemies();
+      increaseEnemySpeed();
     } else {
-      shot.draw(context, 'up');
+      collideWithShield(shot, stopMovement, direction);
     }
-  } else {
-    shot.draw(context, 'down');
+  } 
+  if(direction === 'down') {
+    collideWithShield(shot, stopMovement, direction);
   }
-  const shotMovement = requestAnimationFrame(() => paintShots(shot, ignoreCollisions));
+  const shotMovement = requestAnimationFrame(() => shoot(shot, direction));
 	if (stopMovement) {
     cancelAnimationFrame(shotMovement);
   } 
+}
+
+function increaseEnemySpeed(){
+  renderedEnemies.forEach(enemy => enemy.increaseSpeed(Math.floor(5 * enemies.speed / renderedEnemies.length)));
+}
+
+function collideWithShield(shot, stopMovement, direction){
+  const { collisions, collided } = detectCollision(shot, renderedShields);
+  if (collisions.length) {
+    stopMovement = true;
+    context.clearRect(shot.x, shot.y, shot.width, shot.height);
+  } else {
+    shot.draw(context, direction);      
+  }
+}
+
+function addPoints(points) {
+  const currentPoints = parseInt(pointsElement.textContent);
+  pointsElement.innerHTML = currentPoints + points;
 }
 
 // KILL ENEMY SHIPs
@@ -245,6 +285,14 @@ function detectCollision(shot, targets) {
 
 	return {
 		collisions,
-		collidedEnemy: collisions.length ? collisions[0] : {}
+		collided: collisions.length ? collisions[0] : {}
 	};
 }
+
+var delay = (function(){
+  var timer = 0;
+  return function(callback, ms){
+    clearTimeout (timer);
+    timer = setTimeout(callback, ms);
+  };
+})();

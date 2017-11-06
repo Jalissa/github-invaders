@@ -7,6 +7,7 @@ function Ship(x, y, width, height, speed = 2, enemyShipInfo) {
 	this.level = enemyShipInfo && enemyShipInfo.level;
   this.points = enemyShipInfo && enemyShipInfo.points;
 }
+
 Ship.prototype.move = function(direction, limitWidth) {
 	const { x, speed, width, height } = this;
 	if (direction === 'left') {
@@ -30,6 +31,11 @@ Ship.prototype.draw = function(context, direction, limitWidth) {
   }
   context.fillRect(this.x, this.y, this.width, this.height);
 };
+
+Ship.prototype.increaseSpeed = function(speed) {
+  this.speed += speed;
+};
+
 
 function Shot(ship, y, width, height, movement) {
 	this.x = ship.x + ship.width / 2 - width;
