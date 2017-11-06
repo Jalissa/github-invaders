@@ -36,13 +36,12 @@ const ParticleSystem = function(container, center, count, context) {
 	this.update = function() {
 		const stopAnimation = this.particles.filter(particle => isOutOfContainer(container, particle));
 
-		if (stopAnimation.length < count / 2) {
+		if (stopAnimation.length <= count / 2) {
 			return true;
 		}
 
 		for (let i = 0; i < count; ++i) {
 			const { x, y, width, height } = this.particles[i];
-
 			if (isOutOfContainer(container, this.particles[i])) {
 				this.particles[i].update();
 
