@@ -1,7 +1,7 @@
 const pointsElement = document.getElementById('points');
 const canvas = document.getElementById('canvas');
-canvas.width = 700;
-canvas.height = 700;
+canvas.width = 500;
+canvas.height = 500;
 
 const context = canvas.getContext('2d');
 
@@ -30,39 +30,44 @@ const canvasCoordinates = canvas.getBoundingClientRect();
 pointsParent.style.left = canvasCoordinates.x + 10 + 'px';
 pointsParent.style.top = canvasCoordinates.y + 'px';
 
-
 const settings = {
 	enemies: {
-		width: WIDTH,
-		height: HEIGHT,
-		margin: 20,
+		width: 30,
+		height: 20,
+		margin: 10,
     total: 20,
     speed: 1,
     rowLimit: 10,
+    image: { width: 53, height: 20},
     initY: pointsParent.clientHeight + 10,
 		totalVariety: 3,
-		1: { points: 10	},
-		2: { points: 5	},
-		3: { points: 2  }
-	},
+		1: { points: 10, image: '1.png'	},
+		2: { points: 5, image: '2.png'	},
+		3: { points: 2, image: '3.png' }
+  },
+  sprites: {
+    path: 'sprites/'
+  },
 	ships: {
 		width: WIDTH,
 		height: HEIGHT,
 		x: INIT_X,
-		y: INIT_Y
+    y: INIT_Y,
+    image: 'player.png'
   },
 	shots: {
-		width: 5,
-		height: 20,
-		movement: 10,
+		width: 4,
+		height: 13,
+    movement: 10,
+    color: 'white',
 		y: INIT_Y - HEIGHT
 	},
 	explosions: {
 		count: 30
   },
   shields:{
-    width: 70,
-    height: 40,
+    width: 50,
+    height: 20,
     total: 4,
     margin: 70,
     y: INIT_Y - HEIGHT * 4
@@ -75,9 +80,10 @@ let keyHandlers = {
 }
 
 document.getElementById('yes').addEventListener('click', () => initGame(settings));
+context.fillStyle = 'white';
 initGame(settings);
 
-function initGame({ ships, shots, enemies, explosions, shields }){
+function initGame({ ships, shots, enemies, explosions, shields, sprites }){
   document.getElementById(GAME_OVER).style.display = 'none';
   document.getElementById('text').textContent = 'GAME OVER';
   playerCollided = false;
@@ -88,12 +94,15 @@ function initGame({ ships, shots, enemies, explosions, shields }){
   renderedEnemies = [];
   renderedShields = [];
   const player = new Ship(ships.x, ships.y, ships.width, ships.height);
-  player.draw(context, null, null);
+  player.image = new Image(ships.width, ships.height);
+  player.image.src = sprites.path + ships.image;
+  player.image.addEventListener('load', () => player.draw(context, null, null));
+  
   
   document.addEventListener('keydown', onkeydown(player));
   document.addEventListener('keyup', onkeyup(shots, player, enemies, explosions));
 
-  renderedEnemies = renderEnemies(enemies);
+  renderedEnemies = renderEnemies(enemies, sprites);
   moveEnemies();
   startEnemiesShooting(player, enemies, explosions, shots);
   renderShields(shields);
@@ -118,8 +127,8 @@ function endGame(){
   document.getElementById('total-points').textContent = pointsElement.textContent;
   if(!playerCollided) { document.getElementById('text').textContent = 'Congrats!'; }
   gameOverPanel.style.position = 'absolute';
-  gameOverPanel.style.top = (coordinates.y + canvas.height / 3) + 'px';
-  gameOverPanel.style.left = (coordinates.x + canvas.width / 3) + 'px';
+  gameOverPanel.style.top = (coordinates.y + 220 / 2 + 15) + 'px';
+  gameOverPanel.style.left = (coordinates.x + 252 / 2 + 15) + 'px';
   gameOverPanel.style.display = 'block';
   playerCollided = false;
 }
@@ -178,17 +187,17 @@ function moveShip(player) {
 	shipMovementAnimation = requestAnimationFrame(() => moveShip(player));
 }
 
-function renderEnemies(enemies) {
+function renderEnemies(enemies, sprites) {
 	let enemyShips = [];
-  const { width, height, margin, initY, speed, total, totalVariety, rowLimit } = enemies;
+  const { width, height, margin, initY, speed, image, total, totalVariety, rowLimit } = enemies;
   const initX = (canvas.width - rowLimit * (width + margin)) / 2;
 	let x = initX;
 	let y = initY;
 	let currentVariety = 1;
-	let count = 1;
+  let count = 1;
 	// const margin = (canvas.width - rowLimit * width) / rowLimit;
 	for (let i = 0; i < total * totalVariety; i++) {
-    const enemy = addEnemy(currentVariety, x, y);
+    const enemy = addEnemy(currentVariety, x, y, enemies, enemyShips, sprites);
 		const newX = enemy.width + margin + x;
 		x = newX + enemy.width >= canvas.width || count === rowLimit ? initX: newX;
 		if (x === initX) {
@@ -199,14 +208,28 @@ function renderEnemies(enemies) {
 		count++;
   }
 
-  function addEnemy(varietyNumber, x, y) {
-    const enemy = new Ship(x, y, width, height, speed, { points: enemies[varietyNumber].points, level: varietyNumber });
-    enemyShips.push(enemy);
-    enemy.draw(context, null, null);
-    return enemy;
-  }
-
 	return enemyShips;
+}
+
+function addEnemy(varietyNumber, x, y, enemies, enemyShips, sprites) {
+  const { width, height, speed, image } = enemies;
+  const spriteImage = new Image();
+  spriteImage.src = sprites.path + enemies[varietyNumber].image;
+  const sprite = new Sprite({ 
+      context, width: image.width, 
+      image: spriteImage, 
+      height: image.height, 
+      ticksPerFrame: 30, 
+      numberOfFrames: 2, 
+      x, y });
+  const enemy = new Ship(x, y, width, height, speed, 
+      { points: enemies[varietyNumber].points, 
+        level: varietyNumber,
+        sprite
+      });
+  enemyShips.push(enemy);
+  enemy.draw(context, null, null);
+  return enemy;
 }
 
 function moveEnemies(){
@@ -230,7 +253,7 @@ function moveEnemies(){
 }
 
 function goDown(){
-  renderedEnemies.forEach((enemy, i) => {
+  renderedEnemies.forEach(enemy => {
     enemy.draw(context, 'down', canvas.width);
   });
 }
@@ -279,6 +302,7 @@ function detectEnemyCollision(shot, onCollision, enemiesSpeed, count, margin){
   if (collided) {
     onCollision();
     cancelAnimationFrame(enemiesMovementAnimation);
+    cancelAnimationFrame(collided.spriteAnimation);
     renderedEnemies = renderedEnemies.filter(enemy => !(enemy.x === collided.x && enemy.y === collided.y));    
     killShip(collided, count, margin);
     addPoints(collided.points);
