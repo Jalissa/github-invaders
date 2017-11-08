@@ -5,13 +5,13 @@ canvas.height = 700;
 
 const context = canvas.getContext('2d');
 
+const GAME_OVER = 'game-over';
 const WIDTH = 40;
 const HEIGHT = 20;
 const INIT_Y = canvas.height - HEIGHT;
 const INIT_X = canvas.width / 2 - WIDTH;
 const LEFT_ARROW_KEY = 37;
 const RIGHT_ARROW_KEY = 39;
-
 let LEFT = false;
 let RIGHT = false;
 
@@ -20,9 +20,16 @@ let enemiesMovementAnimation;
 let enemiesShootingAnimation;
 let enemiesShootingTimer;
 let enemiesDirection = 'right';
-
 let renderedEnemies = [];
 let renderedShields = [];
+let playerCollided = false;
+
+const pointsParent = pointsElement.parentNode;
+pointsParent.style.position = 'absolute';
+const canvasCoordinates = canvas.getBoundingClientRect();
+pointsParent.style.left = canvasCoordinates.x + 10 + 'px';
+pointsParent.style.top = canvasCoordinates.y + 'px';
+
 
 const settings = {
 	enemies: {
@@ -31,7 +38,8 @@ const settings = {
 		margin: 20,
     total: 20,
     speed: 1,
-		rowLimit: 10,
+    rowLimit: 10,
+    initY: pointsParent.clientHeight + 10,
 		totalVariety: 3,
 		1: { points: 10	},
 		2: { points: 5	},
@@ -66,9 +74,14 @@ let keyHandlers = {
   onkeydown: {}
 }
 
+document.getElementById('yes').addEventListener('click', () => initGame(settings));
 initGame(settings);
 
 function initGame({ ships, shots, enemies, explosions, shields }){
+  document.getElementById(GAME_OVER).style.display = 'none';
+  document.getElementById('text').textContent = 'GAME OVER';
+  playerCollided = false;
+  pointsElement.innerHTML = '0';
   LEFT = false;
   RIGHT = false;
   enemiesDirection = 'right';
@@ -87,19 +100,28 @@ function initGame({ ships, shots, enemies, explosions, shields }){
 }
 
 function endGame(){
+  context.clearRect(0, 0, canvas.width, canvas.height);
   cancelAnimationFrame(shipMovementAnimation);
   cancelAnimationFrame(enemiesMovementAnimation);
   cancelAnimationFrame(enemiesShootingAnimation);
   clearTimeout(enemiesShootingTimer);
+  renderedEnemies = [];
+  renderedShields = [];
   document.removeEventListener('keyup', keyHandlers.onkeyup);
   document.removeEventListener('keydown', keyHandlers.onkeydown);
   keyHandlers = {
     onkeyup: {},
     onkeydown: {}
   }
-
-  // context.font = "70px Arial";
-  // context.fillText("Game Over", 170, canvas.height/ 2);
+  const coordinates = canvas.getBoundingClientRect();
+  const gameOverPanel = document.getElementById(GAME_OVER);
+  document.getElementById('total-points').textContent = pointsElement.textContent;
+  if(!playerCollided) { document.getElementById('text').textContent = 'Congrats!'; }
+  gameOverPanel.style.position = 'absolute';
+  gameOverPanel.style.top = (coordinates.y + canvas.height / 3) + 'px';
+  gameOverPanel.style.left = (coordinates.x + canvas.width / 3) + 'px';
+  gameOverPanel.style.display = 'block';
+  playerCollided = false;
 }
 
 function shoot(shot, direction, player, enemiesSpeed, count, margin) {
@@ -113,11 +135,7 @@ function shoot(shot, direction, player, enemiesSpeed, count, margin) {
     detectEnemyCollision(shot, () => { stopMovement = true }, enemiesSpeed, count, margin);
   } 
   if(direction === 'down') {
-    const collided = detectPlayerCollision(shot, () => { stopMovement = true }, player, count, margin);
-    if(collided){
-      endGame();
-      cancelAnimationFrame(shotMovement);
-    }
+    detectPlayerCollision(shot, () => { stopMovement = true }, player, count, margin);
   }
   const shotMovement = requestAnimationFrame(() => shoot(shot, direction, player, enemiesSpeed, count, margin));
 	if (stopMovement) {
@@ -162,10 +180,10 @@ function moveShip(player) {
 
 function renderEnemies(enemies) {
 	let enemyShips = [];
-  const { width, height, margin, speed, total, totalVariety, rowLimit } = enemies;
+  const { width, height, margin, initY, speed, total, totalVariety, rowLimit } = enemies;
   const initX = (canvas.width - rowLimit * (width + margin)) / 2;
 	let x = initX;
-	let y = 0;
+	let y = initY;
 	let currentVariety = 1;
 	let count = 1;
 	// const margin = (canvas.width - rowLimit * width) / rowLimit;
@@ -194,18 +212,27 @@ function renderEnemies(enemies) {
 function moveEnemies(){
   if(!renderedEnemies.length) {
     cancelAnimationFrame(enemiesMovementAnimation);
+    endGame();
   }
-  renderedEnemies.forEach(enemy => {
+  renderedEnemies.forEach((enemy, i) => {
     if(enemy.x - enemy.speed <= 0){
       enemiesDirection = 'right';
+      goDown();
     } 
     enemy.draw(context, enemiesDirection, canvas.width);
+  
     if(enemy.x + enemy.speed >= canvas.width - enemy.width){
       enemiesDirection = 'left';
-    }     
+    }
   });
 
   enemiesMovementAnimation = requestAnimationFrame(moveEnemies);
+}
+
+function goDown(){
+  renderedEnemies.forEach((enemy, i) => {
+    enemy.draw(context, 'down', canvas.width);
+  });
 }
 
 function startEnemiesShooting(player, enemies, explosions, shots){
@@ -276,7 +303,9 @@ function detectPlayerCollision(shot, onCollision, player, count, margin) {
   if (collidedPlayer) {
     onCollision();
     if(collidedPlayer) {
+      playerCollided = true;
       killShip(collidedPlayer, count, margin);
+      endGame();
     }
   }
 
