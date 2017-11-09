@@ -86,16 +86,17 @@ Sprite.prototype.updateCoordinates = function(x, y) {
 }
 
 Sprite.prototype.render = function (){
-  this.context.clearRect(this.x, this.y, this.width, this.height);
+  const width = this.width / this.numberOfFrames;
+  this.context.clearRect(this.x, this.y, width, this.height);
   this.context.drawImage(
     this.image,
-    this.frameIndex * this.width / this.numberOfFrames,
+    this.frameIndex * width,
     0,
-    this.width / this.numberOfFrames,
+    width,
     this.height,
     this.x,
     this.y,
-    this.width / this.numberOfFrames,
+    width,
     this.height);
 }
 
@@ -118,4 +119,3 @@ function Shield(x, y, width, height, sprite) {
   this.height = height;
   this.sprite = sprite;
 }
-

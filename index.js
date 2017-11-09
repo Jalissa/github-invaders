@@ -6,8 +6,8 @@ canvas.height = 500;
 const context = canvas.getContext('2d');
 
 const GAME_OVER = 'game-over';
-const WIDTH = 40;
-const HEIGHT = 20;
+const WIDTH = 26;
+const HEIGHT = 16;
 const INIT_Y = canvas.height - HEIGHT;
 const INIT_X = canvas.width / 2 - WIDTH;
 const LEFT_ARROW_KEY = 37;
@@ -35,15 +35,26 @@ const settings = {
 		width: 30,
 		height: 20,
 		margin: 10,
-    total: 20,
+    total: 50,
     speed: 1,
     rowLimit: 10,
-    image: { width: 53, height: 20},
     initY: pointsParent.clientHeight + 10,
 		totalVariety: 3,
-		1: { points: 10, image: '1.png'	},
-		2: { points: 5, image: '2.png'	},
-		3: { points: 2, image: '3.png' }
+		1: { points: 10, total: 10, image: { 
+        name: '1.png',
+        width: 50, 
+        height: 20	}
+    },
+		2: { points: 5, total: 20, image: { 
+        name: '2.png',
+        width: 75, 
+        height: 20	},
+    },
+		3: { points: 2, total: 20, image: { 
+        name: '3.png',
+        width: 78, 
+        height: 20	}
+    }
   },
   sprites: {
     path: 'sprites/'
@@ -66,11 +77,16 @@ const settings = {
 		count: 30
   },
   shields:{
-    width: 50,
-    height: 20,
+    width: 45,
+    height: 38,
     total: 4,
-    margin: 70,
-    y: INIT_Y - HEIGHT * 4
+    margin: 65,
+    y: INIT_Y - HEIGHT * 4,
+    image: { 
+      name: 'shield.png',
+      width: 210, 
+      height: 38,
+      frames: 4	}
   }
 };
 
@@ -98,14 +114,13 @@ function initGame({ ships, shots, enemies, explosions, shields, sprites }){
   player.image.src = sprites.path + ships.image;
   player.image.addEventListener('load', () => player.draw(context, null, null));
   
-  
   document.addEventListener('keydown', onkeydown(player));
   document.addEventListener('keyup', onkeyup(shots, player, enemies, explosions));
 
   renderedEnemies = renderEnemies(enemies, sprites);
   moveEnemies();
-  startEnemiesShooting(player, enemies, explosions, shots);
-  renderShields(shields);
+  //startEnemiesShooting(player, enemies, explosions, shots);
+  renderShields(sprites, shields);
 }
 
 function endGame(){
@@ -125,7 +140,7 @@ function endGame(){
   const coordinates = canvas.getBoundingClientRect();
   const gameOverPanel = document.getElementById(GAME_OVER);
   document.getElementById('total-points').textContent = pointsElement.textContent;
-  if(!playerCollided) { document.getElementById('text').textContent = 'Congrats!'; }
+  if(!playerCollided) { document.getElementById('text').textContent = 'CONGRATS!'; }
   gameOverPanel.style.position = 'absolute';
   gameOverPanel.style.top = (coordinates.y + 220 / 2 + 15) + 'px';
   gameOverPanel.style.left = (coordinates.x + 252 / 2 + 15) + 'px';
@@ -135,21 +150,30 @@ function endGame(){
 
 function shoot(shot, direction, player, enemiesSpeed, count, margin) {
   let stopMovement = false;
+  let shieldCollision, enemyCollision, playerCollision;
   if(shot.y < 0 || shot.y >= canvas.height) {
+    onCollisionFn(shot);   
     stopMovement = true;
   }
-  shot.draw(context, direction);
-  detectShieldCollision(shot, () => { stopMovement = true });
+  if(!stopMovement) { shot.draw(context, direction); }
+  shieldCollision = detectShieldCollision(shot, onCollisionFn);
   if(direction === 'up') {
-    detectEnemyCollision(shot, () => { stopMovement = true }, enemiesSpeed, count, margin);
+    enemyCollision = detectEnemyCollision(shot, onCollisionFn, enemiesSpeed, count, margin);
   } 
   if(direction === 'down') {
-    detectPlayerCollision(shot, () => { stopMovement = true }, player, count, margin);
+    playerCollision = detectPlayerCollision(shot, onCollisionFn, player, count, margin);  
+  }
+  if(shieldCollision || enemyCollision || playerCollision) { 
+    stopMovement = true 
   }
   const shotMovement = requestAnimationFrame(() => shoot(shot, direction, player, enemiesSpeed, count, margin));
 	if (stopMovement) {
     cancelAnimationFrame(shotMovement);
   } 
+}
+
+function onCollisionFn(shot) {
+  context.clearRect(shot.x, shot.y, shot.width, shot.height);
 }
 
 function onkeyup(shots, player, enemies, explosions) {
@@ -163,10 +187,11 @@ function onkeyup(shots, player, enemies, explosions) {
     }
   
     if (event.keyCode !== 32) return;
-    const shot = new Shot(player, shots.y, shots.width, shots.height, shots.movement);  
-    delay(() => {
+    const shot = new Shot(player, shots.y, shots.width, shots.height, shots.movement);
+    
+    setTimeout(() => {
       shoot(shot, 'up', player, enemies.speed, explosions.count, enemies.margin);
-    }, 300);
+    }, 500);
   }
   return keyHandlers.onkeyup;
 }
@@ -189,41 +214,49 @@ function moveShip(player) {
 
 function renderEnemies(enemies, sprites) {
 	let enemyShips = [];
-  const { width, height, margin, initY, speed, image, total, totalVariety, rowLimit } = enemies;
+  const { width, height, margin, initY, speed, total, totalVariety, rowLimit } = enemies;
   const initX = (canvas.width - rowLimit * (width + margin)) / 2;
 	let x = initX;
 	let y = initY;
 	let currentVariety = 1;
   let count = 1;
+  let varietyCount = 1;
 	// const margin = (canvas.width - rowLimit * width) / rowLimit;
-	for (let i = 0; i < total * totalVariety; i++) {
+	for (let i = 1; i <= total; i++) {
     const enemy = addEnemy(currentVariety, x, y, enemies, enemyShips, sprites);
 		const newX = enemy.width + margin + x;
 		x = newX + enemy.width >= canvas.width || count === rowLimit ? initX: newX;
 		if (x === initX) {
       count = 0;
 			y += enemy.height + margin;
-		}
-		if (i === total * currentVariety) currentVariety++;
-		count++;
+    }
+ 
+		if (varietyCount === enemies[currentVariety].total) {
+      currentVariety++;
+      varietyCount = 0;
+    }
+    count++;
+    varietyCount++;
+    
   }
 
 	return enemyShips;
 }
 
 function addEnemy(varietyNumber, x, y, enemies, enemyShips, sprites) {
-  const { width, height, speed, image } = enemies;
+  const { width, height, speed } = enemies;
+  const varietyEnemy = enemies[varietyNumber];
   const spriteImage = new Image();
-  spriteImage.src = sprites.path + enemies[varietyNumber].image;
+  spriteImage.src = sprites.path + varietyEnemy.image.name;
   const sprite = new Sprite({ 
-      context, width: image.width, 
+      context, width: varietyEnemy.image.width, 
       image: spriteImage, 
-      height: image.height, 
+      height: varietyEnemy.image.height, 
       ticksPerFrame: 30, 
       numberOfFrames: 2, 
       x, y });
   const enemy = new Ship(x, y, width, height, speed, 
-      { points: enemies[varietyNumber].points, 
+      { points: varietyEnemy.points, 
         level: varietyNumber,
         sprite
       });
@@ -286,23 +319,36 @@ function increaseEnemySpeed(speed){
   renderedEnemies.forEach(enemy => enemy.increaseSpeed(Math.floor(5 * speed / renderedEnemies.length)));
 }
 
-function renderShields(shields){
-  const { width, height, margin, total, y} = shields;
+function renderShields(sprites, shields){
+  const { width, height, margin, total, y, image} = shields;
   const initX = 30 + (canvas.width - total * (width + margin)) / 2;
   let x = initX;
+  const spriteImage = new Image();
+  spriteImage.src = sprites.path + image.name;
+
   for (let i = 0; i < total; i++) {
-    renderedShields.push({x, y, width, height});
-    context.fillRect(x, y, width, height);
+    const shield = new Shield(x, y, width, height);
+    const sprite = new Sprite({ 
+      context, 
+      width: image.width, 
+      image: spriteImage, 
+      height: image.height,
+      numberOfFrames: image.frames, 
+      x, y });  
+    shield.sprite = sprite;
+    renderedShields.push(shield);    
     x += margin + width;
   }
+  spriteImage.addEventListener('load', () => { 
+    renderedShields.forEach(shield => shield.sprite.render());
+  });
 }
 
 function detectEnemyCollision(shot, onCollision, enemiesSpeed, count, margin){
   const collided = detectCollision(shot, renderedEnemies);
   if (collided) {
-    onCollision();
+    onCollision(shot);
     cancelAnimationFrame(enemiesMovementAnimation);
-    cancelAnimationFrame(collided.spriteAnimation);
     renderedEnemies = renderedEnemies.filter(enemy => !(enemy.x === collided.x && enemy.y === collided.y));    
     killShip(collided, count, margin);
     addPoints(collided.points);
@@ -316,8 +362,9 @@ function detectEnemyCollision(shot, onCollision, enemiesSpeed, count, margin){
 function detectShieldCollision(shot, onCollision){
   const collidedShield = detectCollision(shot, renderedShields);
   if (collidedShield) {
-    onCollision();
-    context.clearRect(shot.x, shot.y, shot.width, shot.height);
+    onCollision(shot);
+    collidedShield.sprite.update();
+    collidedShield.sprite.render();
   } 
   return collidedShield;
 }
@@ -325,7 +372,7 @@ function detectShieldCollision(shot, onCollision){
 function detectPlayerCollision(shot, onCollision, player, count, margin) {
   const collidedPlayer = detectCollision(shot, [player]);
   if (collidedPlayer) {
-    onCollision();
+    onCollision(shot);
     if(collidedPlayer) {
       playerCollided = true;
       killShip(collidedPlayer, count, margin);
