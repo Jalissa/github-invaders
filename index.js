@@ -77,7 +77,7 @@ const settings = {
 		count: 30
   },
   shields:{
-    width: 45,
+    width: 53,
     height: 38,
     total: 4,
     margin: 65,
@@ -115,11 +115,11 @@ function initGame({ ships, shots, enemies, explosions, shields, sprites }){
   player.image.addEventListener('load', () => player.draw(context, null, null));
   
   document.addEventListener('keydown', onkeydown(player));
-  document.addEventListener('keyup', onkeyup(shots, player, enemies, explosions));
+  document.addEventListener('keyup', onkeyup(shots, player, enemies, explosions, shields));
 
   renderedEnemies = renderEnemies(enemies, sprites);
-  moveEnemies();
-  //startEnemiesShooting(player, enemies, explosions, shots);
+  moveEnemies(shields);
+  startEnemiesShooting(player, enemies, explosions, shots, shields);
   renderShields(sprites, shields);
 }
 
@@ -148,17 +148,18 @@ function endGame(){
   playerCollided = false;
 }
 
-function shoot(shot, direction, player, enemiesSpeed, count, margin) {
+function shoot(shot, direction, player, enemiesSpeed, count, margin, shields) {
   let stopMovement = false;
   let shieldCollision, enemyCollision, playerCollision;
   if(shot.y < 0 || shot.y >= canvas.height) {
     onCollisionFn(shot);   
     stopMovement = true;
   }
+
   if(!stopMovement) { shot.draw(context, direction); }
-  shieldCollision = detectShieldCollision(shot, onCollisionFn);
+  shieldCollision = detectShieldCollision(shot, onCollisionFn, direction !== 'down');
   if(direction === 'up') {
-    enemyCollision = detectEnemyCollision(shot, onCollisionFn, enemiesSpeed, count, margin);
+    enemyCollision = detectEnemyCollision(shot, onCollisionFn, enemiesSpeed, count, margin, shields);
   } 
   if(direction === 'down') {
     playerCollision = detectPlayerCollision(shot, onCollisionFn, player, count, margin);  
@@ -166,7 +167,7 @@ function shoot(shot, direction, player, enemiesSpeed, count, margin) {
   if(shieldCollision || enemyCollision || playerCollision) { 
     stopMovement = true 
   }
-  const shotMovement = requestAnimationFrame(() => shoot(shot, direction, player, enemiesSpeed, count, margin));
+  const shotMovement = requestAnimationFrame(() => shoot(shot, direction, player, enemiesSpeed, count, margin, shields));
 	if (stopMovement) {
     cancelAnimationFrame(shotMovement);
   } 
@@ -176,7 +177,7 @@ function onCollisionFn(shot) {
   context.clearRect(shot.x, shot.y, shot.width, shot.height);
 }
 
-function onkeyup(shots, player, enemies, explosions) {
+function onkeyup(shots, player, enemies, explosions, shields) {
   keyHandlers.onkeyup = function(event){
     if (event.keyCode === LEFT_ARROW_KEY) LEFT = false;
     if (event.keyCode === RIGHT_ARROW_KEY) RIGHT = false;
@@ -190,8 +191,8 @@ function onkeyup(shots, player, enemies, explosions) {
     const shot = new Shot(player, shots.y, shots.width, shots.height, shots.movement);
     
     setTimeout(() => {
-      shoot(shot, 'up', player, enemies.speed, explosions.count, enemies.margin);
-    }, 500);
+      shoot(shot, 'up', player, enemies.speed, explosions.count, enemies.margin, shields);
+    }, 1000);
   }
   return keyHandlers.onkeyup;
 }
@@ -221,7 +222,7 @@ function renderEnemies(enemies, sprites) {
 	let currentVariety = 1;
   let count = 1;
   let varietyCount = 1;
-	// const margin = (canvas.width - rowLimit * width) / rowLimit;
+
 	for (let i = 1; i <= total; i++) {
     const enemy = addEnemy(currentVariety, x, y, enemies, enemyShips, sprites);
 		const newX = enemy.width + margin + x;
@@ -265,33 +266,40 @@ function addEnemy(varietyNumber, x, y, enemies, enemyShips, sprites) {
   return enemy;
 }
 
-function moveEnemies(){
+function moveEnemies(shields){
   if(!renderedEnemies.length) {
     cancelAnimationFrame(enemiesMovementAnimation);
     endGame();
   }
-  renderedEnemies.forEach((enemy, i) => {
-    if(enemy.x - enemy.speed <= 0){
-      enemiesDirection = 'right';
-      goDown();
-    } 
-    enemy.draw(context, enemiesDirection, canvas.width);
-  
-    if(enemy.x + enemy.speed >= canvas.width - enemy.width){
-      enemiesDirection = 'left';
+
+  for(let i = 0; i < renderedEnemies.length; i++) {
+    const enemy = renderedEnemies[i];
+    const goRight = enemy.x - enemy.speed <= 0; 
+    const goLeft = enemy.x + enemy.speed >= canvas.width - enemy.width;
+    const land = enemy.y + enemy.height >= shields.y;
+    if(goRight){
+      enemiesDirection = 'right';      
+      renderedEnemies.forEach(enemy => {
+        enemy.draw(context, 'down', canvas.width);
+      });
+      
     }
-  });
+    enemy.draw(context, enemiesDirection, canvas.width);
+    if(goLeft){ enemiesDirection = 'left'; }
+    if(land){
+      renderedEnemies = [];
+      break;
+    } 
+  };
 
-  enemiesMovementAnimation = requestAnimationFrame(moveEnemies);
+  enemiesMovementAnimation = requestAnimationFrame(() => moveEnemies(shields));
 }
 
-function goDown(){
-  renderedEnemies.forEach(enemy => {
-    enemy.draw(context, 'down', canvas.width);
-  });
+function land(enemy){
+  enemy.draw(context, 'left')
 }
 
-function startEnemiesShooting(player, enemies, explosions, shots){
+function startEnemiesShooting(player, enemies, explosions, shots, shields){
   const loners = renderedEnemies.filter(enemy => {
     const underlings = renderedEnemies.filter(enemy2 => {
       return enemy.x === enemy2.x && enemy2.y >= enemy.height + enemies.margin + enemy.y;
@@ -309,8 +317,8 @@ function startEnemiesShooting(player, enemies, explosions, shots){
     const randomEnemy = loners[Math.floor(Math.random()*loners.length)];
     if (randomEnemy) {
       const shot = new Shot(randomEnemy, randomEnemy.y + randomEnemy.height, shots.width, shots.height, shots.movement / 2);            
-      shoot(shot, 'down', player, enemies.speed, explosions.count, enemies.margin);
-      enemiesShootingAnimation = requestAnimationFrame(() => startEnemiesShooting(player, enemies, explosions, shots));    
+      shoot(shot, 'down', player, enemies.speed, explosions.count, enemies.margin, shields);
+      enemiesShootingAnimation = requestAnimationFrame(() => startEnemiesShooting(player, enemies, explosions, shots, shields));    
     }
   }, 1000);
 }
@@ -344,7 +352,7 @@ function renderShields(sprites, shields){
   });
 }
 
-function detectEnemyCollision(shot, onCollision, enemiesSpeed, count, margin){
+function detectEnemyCollision(shot, onCollision, enemiesSpeed, count, margin, shields){
   const collided = detectCollision(shot, renderedEnemies);
   if (collided) {
     onCollision(shot);
@@ -352,17 +360,26 @@ function detectEnemyCollision(shot, onCollision, enemiesSpeed, count, margin){
     renderedEnemies = renderedEnemies.filter(enemy => !(enemy.x === collided.x && enemy.y === collided.y));    
     killShip(collided, count, margin);
     addPoints(collided.points);
-    moveEnemies();
+    moveEnemies(shields);
     increaseEnemySpeed(enemiesSpeed);
   }
   
   return collided;
 }
 
-function detectShieldCollision(shot, onCollision){
+function detectShieldCollision(shot, onCollision, unchange){
   const collidedShield = detectCollision(shot, renderedShields);
   if (collidedShield) {
     onCollision(shot);
+    if(collidedShield.isDestroyable()) {
+      context.clearRect(collidedShield.x, collidedShield.y, collidedShield.width, collidedShield.height);
+      renderedShields = renderedShields.filter(shield => 
+        !(shield.x === collidedShield.x 
+        && shield.y === collidedShield.y))
+      return collidedShield;
+    }
+    
+    if(unchange) return collidedShield;
     collidedShield.sprite.update();
     collidedShield.sprite.render();
   } 

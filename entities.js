@@ -78,11 +78,16 @@ function Sprite({context, width, height, image, ticksPerFrame, numberOfFrames, x
   this.numberOfFrames = numberOfFrames || 1;
   this.x = x;
   this.y = y;
+  this.stopped = false;
 }
 
 Sprite.prototype.updateCoordinates = function(x, y) {
   this.x = x;
   this.y = y;
+}
+Sprite.prototype.stop = function() {
+  this.stopped = true;
+  this.frameIndex = 0;
 }
 
 Sprite.prototype.render = function (){
@@ -101,6 +106,7 @@ Sprite.prototype.render = function (){
 }
 
 Sprite.prototype.update = function () {
+  if(this.stopped) { return; }
   this.tickCount += 1;
   if (this.tickCount > this.ticksPerFrame) {
     this.tickCount = 0;
@@ -118,4 +124,8 @@ function Shield(x, y, width, height, sprite) {
   this.width = width;
   this.height = height;
   this.sprite = sprite;
+}
+
+Shield.prototype.isDestroyable = function() {
+  return this.sprite.frameIndex === this.sprite.numberOfFrames - 1;
 }
