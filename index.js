@@ -24,11 +24,6 @@ let renderedEnemies = [];
 let renderedShields = [];
 let playerCollided = false;
 
-const pointsParent = pointsElement.parentNode;
-pointsParent.style.position = 'absolute';
-const canvasCoordinates = canvas.getBoundingClientRect();
-pointsParent.style.left = canvasCoordinates.x + 10 + 'px';
-pointsParent.style.top = canvasCoordinates.y + 'px';
 
 const settings = {
 	enemies: {
@@ -38,7 +33,7 @@ const settings = {
     total: 50,
     speed: 1,
     rowLimit: 10,
-    initY: pointsParent.clientHeight + 10,
+    initY: 30,
 		totalVariety: 3,
 		1: { points: 10, total: 10, image: { 
         name: '1.png',
@@ -95,9 +90,22 @@ let keyHandlers = {
   onkeydown: {}
 }
 
+positionSigns();
 document.getElementById('yes').addEventListener('click', () => initGame(settings));
 context.fillStyle = 'white';
-initGame(settings);
+
+fetch('https://api.github.com/search/repositories?sort=stars&order=desc&language=javascript&q=javascript')
+  .then(response => response.json())
+  .then(data => {
+    console.log(data);
+    if(data && data.items.length) {
+      for(let i = 0; i < settings.enemies.total; i++) {
+        if(!data.items[i]) break;
+        console.log(data.items[i].full_name, data.items[i].contributors_url );
+      }
+      initGame(settings);  
+    }
+  });
 
 function initGame({ ships, shots, enemies, explosions, shields, sprites }){
   document.getElementById(GAME_OVER).style.display = 'none';
@@ -116,6 +124,7 @@ function initGame({ ships, shots, enemies, explosions, shields, sprites }){
   
   document.addEventListener('keydown', onkeydown(player));
   document.addEventListener('keyup', onkeyup(shots, player, enemies, explosions, shields));
+  window.addEventListener('resize', positionSigns);
 
   renderedEnemies = renderEnemies(enemies, sprites);
   moveEnemies(shields);
@@ -133,10 +142,18 @@ function endGame(){
   renderedShields = [];
   document.removeEventListener('keyup', keyHandlers.onkeyup);
   document.removeEventListener('keydown', keyHandlers.onkeydown);
+
   keyHandlers = {
     onkeyup: {},
     onkeydown: {}
   }
+  const gameOverPanel = positionSigns();
+  gameOverPanel.style.display = 'block';
+
+  playerCollided = false;
+}
+
+function positionSigns() {
   const coordinates = canvas.getBoundingClientRect();
   const gameOverPanel = document.getElementById(GAME_OVER);
   document.getElementById('total-points').textContent = pointsElement.textContent;
@@ -144,8 +161,14 @@ function endGame(){
   gameOverPanel.style.position = 'absolute';
   gameOverPanel.style.top = (coordinates.y + 220 / 2 + 15) + 'px';
   gameOverPanel.style.left = (coordinates.x + 252 / 2 + 15) + 'px';
-  gameOverPanel.style.display = 'block';
-  playerCollided = false;
+  
+  const pointsParent = pointsElement.parentNode;
+  pointsParent.style.position = 'absolute';
+  pointsParent.style.left = Math.abs(coordinates.x) + 10 + 'px';
+  console.log(pointsParent.style.left)
+  // pointsParent.style.top = coordinates.y + 'px';
+
+  return gameOverPanel;
 }
 
 function shoot(shot, direction, player, enemiesSpeed, count, margin, shields) {
@@ -189,10 +212,7 @@ function onkeyup(shots, player, enemies, explosions, shields) {
   
     if (event.keyCode !== 32) return;
     const shot = new Shot(player, shots.y, shots.width, shots.height, shots.movement);
-    
-    setTimeout(() => {
-      shoot(shot, 'up', player, enemies.speed, explosions.count, enemies.margin, shields);
-    }, 1000);
+    shoot(shot, 'up', player, enemies.speed, explosions.count, enemies.margin, shields);
   }
   return keyHandlers.onkeyup;
 }
